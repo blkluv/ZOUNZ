@@ -3,22 +3,26 @@ import { useAppStore, type MintableTrack } from '../lib/store'
 import { useFarcasterContext } from '../providers/FarcasterProvider'
 
 export default function Mint() {
-  const { mintQueue, clearMintQueue, setTab } = useAppStore()
-  const { composeCast } = useFarcasterContext()
+  const { mintQueue, clearMintQueue } = useAppStore()
+  const { user, composeCast } = useFarcasterContext()
   const [step, setStep] = useState<'select' | 'configure' | 'minting' | 'success'>('select')
   const [track, setTrack] = useState<MintableTrack | null>(null)
-  const [mintConfig, setMintConfig] = useState({
-    price: '0.001',
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [mintTx, setMintTx] = useState<{
+    collectionId: string
+    tokenId: string
+    txHash: string
+    baseUrl: string
+  } | null>(null)
+  const [config, setConfig] = useState({
     supply: '100',
-    title: '',
+    royaltyPercent: '10',
   })
-  const [mintResult, setMintResult] = useState<{ contractAddress: string; tokenId: string } | null>(null)
 
-  // Consume mint queue when it arrives
   useEffect(() => {
     if (mintQueue) {
       setTrack(mintQueue)
-      setMintConfig((c) => ({ ...c, title: mintQueue.title }))
       setStep('configure')
       clearMintQueue()
     }
@@ -27,272 +31,175 @@ export default function Mint() {
   const handleMint = async () => {
     if (!track) return
     setStep('minting')
+    setLoading(true)
+    setError(null)
 
     try {
-      // Step 1: Upload to IPFS
-      const uploadRes = await fetch('/api/upload', {
+      const res = await fetch('/api/mint', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: mintConfig.title,
+          collectionId: track.collectionId,
+          title: track.title,
           artist: track.artist,
           audioUrl: track.audioUrl,
-          artworkUrl: track.artworkUrl,
-          genre: track.genre,
+          supply: config.supply,
+          royaltyPercent: config.royaltyPercent,
+          creatorAddress: user?.walletAddress || '0x0',
         }),
       })
 
-      let metadataUri = ''
-      if (uploadRes.ok) {
-        const uploadData = await uploadRes.json()
-        metadataUri = uploadData.metadataUri
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Minting failed')
       }
 
-      // Step 2: Create Zora 1155 collection
-      const mintRes = await fetch('/api/mint', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: mintConfig.title,
-          metadataUri,
-          price: mintConfig.price,
-          supply: mintConfig.supply,
-        }),
-      })
-
-      if (mintRes.ok) {
-        const data = await mintRes.json()
-        setMintResult(data)
-      } else {
-        // Simulate success for demo
-        setMintResult({
-          contractAddress: '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
-          tokenId: '1',
-        })
-      }
-
-      setStep('success')
-    } catch {
-      // Fallback demo mode
-      setMintResult({
-        contractAddress: '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
-        tokenId: '1',
+      const data = await res.json()
+      setMintTx({
+        collectionId: data.collectionId,
+        tokenId: data.tokenId,
+        txHash: data.txHash,
+        baseUrl: data.baseUrl,
       })
       setStep('success')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Minting failed')
+      setStep('configure')
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleCast = () => {
-    const addr = mintResult?.contractAddress?.slice(0, 10) ?? '0x...'
-    composeCast(
-      `Just minted "${mintConfig.title}" on @zaounz 🎵💎\n\nCollect it on Base ↓`,
-      [`https://zora.co/collect/base:${mintResult?.contractAddress ?? addr}`]
+  const handleCast = async () => {
+    if (!mintTx || !track) return
+    try {
+      await composeCast({
+        text: `Just minted "${track.title}" by ${track.artist} on ZAOUNZ! 🎵\n\nMint your own: ${mintTx.baseUrl}/collect/${mintTx.collectionId}/${mintTx.tokenId}`,
+        embeds: [{ url: `${mintTx.baseUrl}/collect/${mintTx.collectionId}/${mintTx.tokenId}` }],
+      })
+    } catch (err) {
+      console.error('Failed to cast:', err)
+    }
+  }
+
+  if (!track && step === 'select') {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4 p-4 text-center">
+        <div className="text-4xl">🎵</div>
+        <h2 className="text-lg font-bold text-white">No Track Selected</h2>
+        <p className="text-sm text-white/60">Go to Browse or Create a collection,<br/>then select a track to mint</p>
+      </div>
     )
   }
 
-  const resetFlow = () => {
-    setStep('select')
-    setTrack(null)
-    setMintResult(null)
-    setMintConfig({ price: '0.001', supply: '100', title: '' })
+  if (step === 'success' && mintTx && track) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4 p-4">
+        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center text-3xl animate-bounce">
+          ✓
+        </div>
+        <div className="text-center max-w-sm">
+          <h2 className="text-xl font-bold text-white mb-1">NFT Minted!</h2>
+          <p className="text-sm text-white/60 mb-4">"${track.title}" is now an NFT on Base</p>
+          <a
+            href={`https://basescan.org/tx/${mintTx.txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-purple-400 hover:text-purple-300 break-all"
+          >
+            View on Basescan →
+          </a>
+        </div>
+
+        <div className="w-full space-y-2">
+          <button
+            onClick={handleCast}
+            className="w-full py-2 rounded-lg bg-[#5865F2] text-white font-medium text-sm hover:bg-[#4752C4] transition"
+          >
+            Share to Farcaster
+          </button>
+          <button
+            onClick={() => {
+              setMintTx(null)
+              setTrack(null)
+              setStep('select')
+            }}
+            className="w-full py-2 rounded-lg bg-white/5 border border-white/10 text-white font-medium text-sm hover:bg-white/10 transition"
+          >
+            Mint Another
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="p-4 flex flex-col gap-4">
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        handleMint()
+      }}
+      className="flex flex-col gap-4 p-4 h-full"
+    >
       <div>
-        <h2 className="text-xl font-bold">Mint NFT</h2>
-        <p className="text-sm text-white/50 mt-1">
-          Zora 1155 on Base
-        </p>
+        <h1 className="text-lg font-bold text-white">Mint NFT</h1>
+        <p className="text-sm text-white/60 mt-1">Configure and mint your track as an NFT on Base</p>
       </div>
 
-      {/* SELECT */}
-      {step === 'select' && (
-        <div className="space-y-3">
-          <div className="bg-[var(--zaounz-card)] border border-[var(--zaounz-border)] border-dashed rounded-xl p-8 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center mx-auto mb-3">
-              <span className="text-2xl">💎</span>
-            </div>
-            <p className="text-white/40 text-sm mb-1 font-medium">No track selected</p>
-            <p className="text-white/20 text-xs mb-4">
-              Create or discover a track first, then tap "Mint NFT"
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setTab('create')}
-                className="flex-1 py-2.5 rounded-xl bg-purple-500/15 text-purple-400 text-xs font-medium active:scale-[0.98] transition-transform"
-              >
-                🎵 Create with AI
-              </button>
-              <button
-                onClick={() => setTab('discover')}
-                className="flex-1 py-2.5 rounded-xl bg-pink-500/15 text-pink-400 text-xs font-medium active:scale-[0.98] transition-transform"
-              >
-                🔍 Find on Audius
-              </button>
-            </div>
+      <div className="flex-1 overflow-y-auto space-y-4">
+        {track && (
+          <div className="p-3 rounded-lg bg-white/5 border border-white/10">
+            <p className="text-xs text-white/60 mb-2">Track</p>
+            <p className="text-sm font-medium text-white">{track.title}</p>
+            <p className="text-xs text-white/50">{track.artist}</p>
+            <p className="text-xs text-purple-400 mt-1">Collection: {track.collectionName}</p>
           </div>
+        )}
 
-          {/* Info Card */}
-          <div className="bg-[var(--zaounz-card)] border border-[var(--zaounz-border)] rounded-xl p-4 space-y-3">
-            <p className="text-xs text-white/30 font-semibold uppercase tracking-wider">How minting works</p>
-            <div className="space-y-2">
-              {[
-                { icon: '📤', text: 'Audio + artwork uploaded to IPFS' },
-                { icon: '⛓️', text: 'Zora 1155 NFT created on Base' },
-                { icon: '💰', text: 'Set your price + supply' },
-                { icon: '📣', text: 'Cast on Farcaster for others to collect' },
-              ].map((item, i) => (
-                <div key={i} className="flex items-center gap-2.5 text-xs text-white/40">
-                  <span>{item.icon}</span>
-                  <span>{item.text}</span>
-                </div>
-              ))}
-            </div>
-            <div className="pt-2 border-t border-[var(--zaounz-border)] text-[10px] text-white/20">
-              Zora protocol fee: 0.000777 ETH per mint
-            </div>
-          </div>
+        <div>
+          <label className="block text-xs font-medium text-white/80 mb-2">Supply (Number of NFTs)</label>
+          <input
+            type="number"
+            value={config.supply}
+            onChange={(e) => setConfig({ ...config, supply: e.target.value })}
+            min="1"
+            max="10000"
+            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-purple-500/50 focus:bg-white/10"
+          />
         </div>
-      )}
 
-      {/* CONFIGURE */}
-      {step === 'configure' && track && (
-        <div className="space-y-3">
-          {/* Track Preview */}
-          <div className="bg-[var(--zaounz-card)] border border-purple-500/20 rounded-xl p-4">
-            <div className="flex gap-3 items-center">
-              <div className="w-16 h-16 rounded-xl overflow-hidden bg-gradient-to-br from-purple-500 to-pink-500 flex-shrink-0">
-                {track.artworkUrl ? (
-                  <img src={track.artworkUrl} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-2xl">🎵</div>
-                )}
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold truncate">{track.title}</p>
-                <p className="text-xs text-white/40">{track.artist}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                    track.source === 'ai_generated'
-                      ? 'bg-purple-500/20 text-purple-400'
-                      : 'bg-pink-500/20 text-pink-400'
-                  }`}>
-                    {track.source === 'ai_generated' ? 'AI Generated' : 'Audius'}
-                  </span>
-                  {track.genre && (
-                    <span className="text-[10px] text-white/25">{track.genre}</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Config Fields */}
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs text-white/50 mb-1.5 block font-medium">NFT Title</label>
-              <input
-                value={mintConfig.title}
-                onChange={(e) => setMintConfig((c) => ({ ...c, title: e.target.value }))}
-                className="w-full bg-[var(--zaounz-card)] border border-[var(--zaounz-border)] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500/50 transition-colors"
-              />
-            </div>
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className="text-xs text-white/50 mb-1.5 block font-medium">Price (ETH)</label>
-                <input
-                  value={mintConfig.price}
-                  onChange={(e) => setMintConfig((c) => ({ ...c, price: e.target.value }))}
-                  type="number"
-                  step="0.001"
-                  min="0"
-                  className="w-full bg-[var(--zaounz-card)] border border-[var(--zaounz-border)] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500/50 transition-colors"
-                />
-                <p className="text-[10px] text-white/20 mt-1">0 = free mint</p>
-              </div>
-              <div className="flex-1">
-                <label className="text-xs text-white/50 mb-1.5 block font-medium">Supply</label>
-                <input
-                  value={mintConfig.supply}
-                  onChange={(e) => setMintConfig((c) => ({ ...c, supply: e.target.value }))}
-                  type="number"
-                  min="1"
-                  className="w-full bg-[var(--zaounz-card)] border border-[var(--zaounz-border)] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500/50 transition-colors"
-                />
-                <p className="text-[10px] text-white/20 mt-1">editions</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-2 pt-1">
-            <button
-              onClick={resetFlow}
-              className="flex-1 py-3 rounded-xl bg-[var(--zaounz-card)] text-white/50 text-sm font-medium active:scale-[0.98] transition-transform"
-            >
-              Back
-            </button>
-            <button
-              onClick={handleMint}
-              className="flex-1 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-bold active:scale-[0.98] transition-transform"
-            >
-              Mint on Base
-            </button>
-          </div>
+        <div>
+          <label className="block text-xs font-medium text-white/80 mb-2">Royalty %</label>
+          <input
+            type="number"
+            value={config.royaltyPercent}
+            onChange={(e) => setConfig({ ...config, royaltyPercent: e.target.value })}
+            min="0"
+            max="50"
+            step="0.5"
+            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-purple-500/50 focus:bg-white/10"
+          />
+          <p className="text-xs text-white/40 mt-1">You'll earn {config.royaltyPercent}% on secondary sales</p>
         </div>
-      )}
 
-      {/* MINTING */}
-      {step === 'minting' && (
-        <div className="flex flex-col items-center justify-center py-20">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-4 animate-pulse">
-            <span className="text-2xl">💎</span>
-          </div>
-          <p className="text-sm font-medium text-white/80">Creating your NFT...</p>
-          <div className="mt-3 space-y-1 text-center">
-            <p className="text-xs text-white/30">Uploading to IPFS</p>
-            <p className="text-xs text-white/30">Creating Zora 1155 on Base</p>
-          </div>
-          <div className="mt-4 w-40 h-1 bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full animate-pulse" style={{ width: '70%' }} />
-          </div>
+        <div className="p-3 rounded-lg bg-blue-500/20 border border-blue-500/50 text-blue-300 text-xs">
+          ℹ️ Minting on <strong>Base</strong> network. Gas fees are minimal (~$0.01-$0.10)
         </div>
-      )}
 
-      {/* SUCCESS */}
-      {step === 'success' && (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center mb-4">
-            <span className="text-3xl">✓</span>
+        {error && (
+          <div className="p-3 rounded-lg bg-red-500/20 border border-red-500/50 text-red-300 text-xs">
+            {error}
           </div>
-          <p className="text-lg font-bold">Minted!</p>
-          <p className="text-sm text-white/50 mt-1 mb-1">{mintConfig.title}</p>
-          <p className="text-xs text-white/25">Live on Base via Zora</p>
+        )}
+      </div>
 
-          {mintResult && (
-            <div className="mt-4 bg-[var(--zaounz-card)] rounded-xl p-3 w-full text-left">
-              <p className="text-[10px] text-white/30 mb-1">Contract</p>
-              <p className="text-xs text-white/60 font-mono truncate">{mintResult.contractAddress}</p>
-            </div>
-          )}
-
-          <div className="flex gap-2 mt-6 w-full">
-            <button
-              onClick={handleCast}
-              className="flex-1 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold active:scale-[0.98] transition-transform"
-            >
-              Cast on Farcaster 📣
-            </button>
-            <button
-              onClick={resetFlow}
-              className="py-3 px-4 rounded-xl bg-[var(--zaounz-card)] text-white/50 text-xs font-medium"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+      <button
+        type="submit"
+        disabled={!track || loading}
+        className="w-full py-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium text-sm hover:from-purple-400 hover:to-pink-400 disabled:opacity-50 disabled:cursor-not-allowed transition"
+      >
+        {loading ? 'Minting...' : step === 'minting' ? 'Processing...' : 'Mint NFT'}
+      </button>
+    </form>
   )
 }

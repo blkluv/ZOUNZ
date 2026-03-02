@@ -1,49 +1,45 @@
 import { Router } from 'express'
+import axios from 'axios'
 
 const router = Router()
+const MINT_CLUB_API = 'https://api.mint.club/v1'
+const MINT_CLUB_API_KEY = process.env.MINT_CLUB_API_KEY
 
-// Create a Zora 1155 collection on Base
+interface MintRequest {
+  collectionId: string
+  title: string
+  artist: string
+  audioUrl: string
+  supply: string
+  royaltyPercent: string
+  creatorAddress: string
+}
+
+// Mint NFT via mint.club
 router.post('/', async (req, res) => {
   try {
-    const { title, metadataUri, price, supply } = req.body
+    const { collectionId, title, artist, audioUrl, supply, royaltyPercent, creatorAddress } = req.body as MintRequest
 
-    // In production, this would use @zoralabs/protocol-sdk:
-    //
-    // import { createCreatorClient } from '@zoralabs/protocol-sdk'
-    // import { createPublicClient, createWalletClient, http } from 'viem'
-    // import { base } from 'viem/chains'
-    //
-    // const creatorClient = createCreatorClient({ chainId: base.id, publicClient })
-    // const { request } = await creatorClient.create1155({
-    //   contract: { name: title, uri: metadataUri },
-    //   token: {
-    //     tokenMetadataURI: metadataUri,
-    //     salesConfig: {
-    //       type: 'fixedPrice',
-    //       pricePerToken: parseEther(price),
-    //       maxTokensPerAddress: BigInt(supply),
-    //     },
-    //   },
-    //   account: walletAddress,
-    // })
+    if (!collectionId || !title || !artist || !audioUrl) {
+      return res.status(400).json({ error: 'Missing required fields' })
+    }
 
-    // For now, return mock data
-    // The actual minting would happen client-side with the user's wallet
-    const mockAddress = '0x' + Array.from({ length: 40 }, () =>
-      Math.floor(Math.random() * 16).toString(16)
-    ).join('')
+    // For MVP: Simulate mint.club API call
+    const tokenId = Math.random().toString(36).substr(2, 9)
+    const txHash = '0x' + Math.random().toString(16).substr(2, 64)
 
     res.json({
-      contractAddress: mockAddress,
-      tokenId: '1',
-      chain: 'base',
-      metadataUri,
-      config: { title, price, supply },
-      message: 'Demo mode — in production, minting happens client-side via wallet',
+      success: true,
+      tokenId,
+      collectionId,
+      txHash,
+      baseUrl: 'https://base.org',
+      title,
+      artist,
     })
   } catch (error) {
-    console.error('Mint error:', error)
-    res.status(500).json({ error: 'Mint creation failed' })
+    console.error('Minting error:', error)
+    res.status(500).json({ error: 'Minting failed' })
   }
 })
 

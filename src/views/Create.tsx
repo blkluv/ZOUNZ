@@ -1,209 +1,129 @@
 import { useState } from 'react'
 import { useAppStore } from '../lib/store'
-
-const GENRES = [
-  'Any', 'Electronic', 'Hip-Hop', 'Lo-fi', 'Pop', 'Rock',
-  'R&B', 'Jazz', 'Ambient', 'House', 'Drum & Bass', 'Trap',
-]
+import { useFarcasterContext } from '../providers/FarcasterProvider'
 
 export default function Create() {
-  const [prompt, setPrompt] = useState('')
-  const [genre, setGenre] = useState('Any')
+  const [step, setStep] = useState<'form' | 'success'>('form')
   const [loading, setLoading] = useState(false)
-  const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const { queueForMint, playerPlay } = useAppStore()
+  const [collectionName, setCollectionName] = useState('')
+  const [collectionDescription, setCollectionDescription] = useState('')
+  const [imageUrl, setImageUrl] = useState('')
+  const { user } = useFarcasterContext()
 
-  const trackTitle = prompt.slice(0, 50) || 'AI Track'
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!collectionName.trim() || !collectionDescription.trim()) {
+      setError('Please fill in all fields')
+      return
+    }
 
-  const handleGenerate = async () => {
-    if (!prompt.trim()) return
     setLoading(true)
     setError(null)
-    setAudioUrl(null)
 
     try {
-      const fullPrompt = genre !== 'Any'
-        ? `${genre} style: ${prompt}`
-        : prompt
-
-      const res = await fetch('/api/generate', {
+      const res = await fetch('/api/collections/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: fullPrompt, duration: 30 }),
+        body: JSON.stringify({
+          name: collectionName,
+          description: collectionDescription,
+          imageUrl: imageUrl || 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=300&h=300&fit=crop',
+          creator: user?.username || 'anonymous',
+          creatorFid: user?.fid || '0',
+        }),
       })
 
-      if (!res.ok) throw new Error('Generation failed')
-      const data = await res.json()
-      if (data.mock) {
-        setError('Set HF_TOKEN to enable AI generation. Running in demo mode.')
-        return
-      }
-      setAudioUrl(data.audioUrl)
+      if (!res.ok) throw new Error('Failed to create collection')
+      
+      setStep('success')
+      setTimeout(() => {
+        setCollectionName('')
+        setCollectionDescription('')
+        setImageUrl('')
+        setStep('form')
+      }, 2000)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong')
+      setError(err instanceof Error ? err.message : 'Creation failed')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleMintClick = () => {
-    if (!audioUrl) return
-    queueForMint({
-      id: `ai-${Date.now()}`,
-      title: trackTitle,
-      artist: 'You',
-      audioUrl,
-      source: 'ai_generated',
-      genre: genre !== 'Any' ? genre : undefined,
-    })
-  }
-
-  const handlePlay = () => {
-    if (!audioUrl) return
-    playerPlay({
-      id: `ai-${Date.now()}`,
-      title: trackTitle,
-      artist: 'You',
-      audioUrl,
-      source: 'ai_generated',
-      genre: genre !== 'Any' ? genre : undefined,
-    })
+  if (step === 'success') {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4 p-4">
+        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center text-3xl">
+          ✓
+        </div>
+        <div className="text-center">
+          <h2 className="text-xl font-bold text-white">Collection Created!</h2>
+          <p className="text-sm text-white/60 mt-2">"{collectionName}" is ready for NFT minting</p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="p-4 flex flex-col gap-4">
-      {/* Title */}
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-4 h-full">
       <div>
-        <h2 className="text-xl font-bold">Create Music</h2>
-        <p className="text-sm text-white/50 mt-1">
-          Describe a song and AI will generate it
-        </p>
+        <h1 className="text-lg font-bold text-white">Create Collection</h1>
+        <p className="text-sm text-white/60 mt-1">Start a new music NFT collection</p>
       </div>
 
-      {/* Prompt Input */}
-      <div className="relative">
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder="A dreamy lo-fi beat with soft piano and rain sounds..."
-          className="w-full h-28 bg-[var(--zaounz-card)] border border-[var(--zaounz-border)] rounded-xl p-3 text-sm text-white placeholder:text-white/30 resize-none focus:outline-none focus:border-purple-500/50 transition-colors"
-          maxLength={500}
-        />
-        <span className="absolute bottom-2 right-3 text-[10px] text-white/20">
-          {prompt.length}/500
-        </span>
-      </div>
+      <div className="flex-1 overflow-y-auto space-y-4">
+        <div>
+          <label className="block text-xs font-medium text-white/80 mb-2">Collection Name</label>
+          <input
+            type="text"
+            value={collectionName}
+            onChange={(e) => setCollectionName(e.target.value)}
+            placeholder="e.g., Summer Beats 2026"
+            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-purple-500/50 focus:bg-white/10"
+          />
+        </div>
 
-      {/* Genre Chips */}
-      <div className="flex flex-wrap gap-1.5">
-        {GENRES.map((g) => (
-          <button
-            key={g}
-            onClick={() => setGenre(g)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-              genre === g
-                ? 'bg-purple-500 text-white scale-105'
-                : 'bg-[var(--zaounz-card)] text-white/40 border border-[var(--zaounz-border)] hover:text-white/60 hover:border-white/20'
-            }`}
-          >
-            {g}
-          </button>
-        ))}
-      </div>
+        <div>
+          <label className="block text-xs font-medium text-white/80 mb-2">Description</label>
+          <textarea
+            value={collectionDescription}
+            onChange={(e) => setCollectionDescription(e.target.value)}
+            placeholder="Tell creators about this collection..."
+            rows={3}
+            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-purple-500/50 focus:bg-white/10"
+          />
+        </div>
 
-      {/* Generate Button */}
-      <button
-        onClick={handleGenerate}
-        disabled={loading || !prompt.trim()}
-        className="w-full py-3.5 rounded-xl font-semibold text-sm bg-gradient-to-r from-purple-500 to-pink-500 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-[0.98]"
-      >
-        {loading ? (
-          <span className="flex items-center justify-center gap-2">
-            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            Generating...
-          </span>
-        ) : (
-          'Create Music'
+        <div>
+          <label className="block text-xs font-medium text-white/80 mb-2">Cover Image URL (optional)</label>
+          <input
+            type="url"
+            value={imageUrl}
+            onChange={(e) => setImageUrl(e.target.value)}
+            placeholder="https://..."
+            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-purple-500/50 focus:bg-white/10"
+          />
+        </div>
+
+        <div className="p-3 rounded-lg bg-white/5 border border-white/10">
+          <p className="text-xs text-white/60">Creator</p>
+          <p className="text-sm font-medium text-white">@{user?.username || 'anonymous'}</p>
+        </div>
+
+        {error && (
+          <div className="p-3 rounded-lg bg-red-500/20 border border-red-500/50 text-red-300 text-xs">
+            {error}
+          </div>
         )}
+      </div>
+
+      <button
+        type="submit"
+        disabled={loading || !collectionName.trim() || !collectionDescription.trim()}
+        className="w-full py-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium text-sm hover:from-purple-400 hover:to-pink-400 disabled:opacity-50 disabled:cursor-not-allowed transition"
+      >
+        {loading ? 'Creating...' : 'Create Collection'}
       </button>
-
-      {/* Error */}
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
-          <p className="text-sm text-red-400">{error}</p>
-          <p className="text-xs text-white/30 mt-1">
-            Make sure the backend server is running on port 3001
-          </p>
-        </div>
-      )}
-
-      {/* Generated Track Result */}
-      {audioUrl && (
-        <div className="bg-[var(--zaounz-card)] border border-purple-500/20 rounded-xl p-4 space-y-3">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handlePlay}
-              className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-xl flex-shrink-0 active:scale-95 transition-transform"
-            >
-              ▶
-            </button>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate">{trackTitle}</p>
-              <p className="text-xs text-white/40">AI Generated / {genre}</p>
-              <div className="flex items-center gap-1 mt-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                <span className="text-[10px] text-green-400">Ready</span>
-              </div>
-            </div>
-          </div>
-
-          <audio controls src={audioUrl} className="w-full h-8 opacity-60" />
-
-          <div className="flex gap-2">
-            <a
-              href={audioUrl}
-              download={`zaounz-${Date.now()}.wav`}
-              className="flex-1 py-2.5 rounded-xl bg-white/5 text-center text-xs font-medium text-white/60 hover:bg-white/10 transition-colors active:scale-[0.98]"
-            >
-              Download
-            </a>
-            <button
-              onClick={handleMintClick}
-              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 text-xs font-semibold hover:from-purple-500/30 hover:to-pink-500/30 transition-all active:scale-[0.98]"
-            >
-              Mint as NFT →
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* How it works */}
-      {!audioUrl && !loading && (
-        <div className="mt-4 bg-[var(--zaounz-card)] border border-[var(--zaounz-border)] rounded-xl p-4">
-          <p className="text-xs text-white/30 font-semibold uppercase tracking-wider mb-3">How it works</p>
-          <div className="space-y-3">
-            {[
-              { step: '1', title: 'Describe', desc: 'Type what kind of music you want' },
-              { step: '2', title: 'Generate', desc: 'AI creates a unique track using ACE-Step' },
-              { step: '3', title: 'Own it', desc: 'Mint as an NFT on Base via Zora' },
-            ].map((item) => (
-              <div key={item.step} className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
-                  <span className="text-[10px] font-bold text-purple-400">{item.step}</span>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-white/70">{item.title}</p>
-                  <p className="text-[10px] text-white/30">{item.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+    </form>
   )
 }
