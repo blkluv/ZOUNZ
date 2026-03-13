@@ -1,13 +1,14 @@
 import { createContext, useContext } from 'react'
 
 export type MintableTrack = {
-  id: string | number; // Allows both to fix Browse.tsx/Discover.tsx errors
+  id: string | number; // Fixes 'string not assignable to number' error
   title: string;
   artist: string;
   audioUrl: string;
   artworkUrl?: string;
   source?: string;
-  genre?: string;      // ADDED: Fixes Discover.tsx error
+  genre?: string;
+  audiusTrackId?: string | number; // ADDED: Fixes Discover.tsx error
   collectionId?: string;
   collectionName?: string;
   duration?: number;
