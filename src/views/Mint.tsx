@@ -45,7 +45,8 @@ export default function Mint() {
           audioUrl: track.audioUrl,
           supply: config.supply,
           royaltyPercent: config.royaltyPercent,
-          creatorAddress: user?.walletAddress || '0x0',
+          // FIX: Use custody_address for Farcaster users
+          creatorAddress: user?.custody_address || '0x0',
         }),
       })
 
@@ -73,9 +74,10 @@ export default function Mint() {
   const handleCast = async () => {
     if (!mintTx || !track) return
     try {
+      // FIX: Ensure the object structure matches the Farcaster SDK expected type
       await composeCast({
         text: `Just minted "${track.title}" by ${track.artist} on ZAOUNZ! 🎵\n\nMint your own: ${mintTx.baseUrl}/collect/${mintTx.collectionId}/${mintTx.tokenId}`,
-        embeds: [{ url: `${mintTx.baseUrl}/collect/${mintTx.collectionId}/${mintTx.tokenId}` }],
+        embeds: [`${mintTx.baseUrl}/collect/${mintTx.collectionId}/${mintTx.tokenId}`],
       })
     } catch (err) {
       console.error('Failed to cast:', err)
@@ -100,7 +102,7 @@ export default function Mint() {
         </div>
         <div className="text-center max-w-sm">
           <h2 className="text-xl font-bold text-white mb-1">NFT Minted!</h2>
-          <p className="text-sm text-white/60 mb-4">"${track.title}" is now an NFT on Base</p>
+          <p className="text-sm text-white/60 mb-4">"{track.title}" is now an NFT on Base</p>
           <a
             href={`https://basescan.org/tx/${mintTx.txHash}`}
             target="_blank"
@@ -152,7 +154,9 @@ export default function Mint() {
             <p className="text-xs text-white/60 mb-2">Track</p>
             <p className="text-sm font-medium text-white">{track.title}</p>
             <p className="text-xs text-white/50">{track.artist}</p>
-            <p className="text-xs text-purple-400 mt-1">Collection: {track.collectionName}</p>
+            {track.collectionName && (
+               <p className="text-xs text-purple-400 mt-1">Collection: {track.collectionName}</p>
+            )}
           </div>
         )}
 
