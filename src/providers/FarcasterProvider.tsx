@@ -6,7 +6,7 @@ interface FarcasterUser {
   username: string
   displayName: string
   pfpUrl: string
-  custody_address: string // ADDED: Required for Minting logic
+  custody_address: string 
 }
 
 interface FarcasterContextType {
@@ -14,7 +14,7 @@ interface FarcasterContextType {
   isReady: boolean
   isInMiniApp: boolean
   openUrl: (url: string) => void
-  composeCast: (params: { text: string; embeds?: string[] }) => void // UPDATED: Matches your Mint.tsx usage
+  composeCast: (params: { text: string; embeds?: string[] }) => void
   close: () => void
 }
 
@@ -40,14 +40,16 @@ export function FarcasterProvider({ children }: { children: ReactNode }) {
     async function init() {
       try {
         const context = await sdk.context
-        if (context?.user) {
+        // FIX: Cast to 'any' to allow access to custody_address which is missing from SDK types
+        const sdkUser = context?.user as any 
+
+        if (sdkUser) {
           setUser({
-            fid: context.user.fid,
-            username: context.user.username ?? '',
-            displayName: context.user.displayName ?? '',
-            pfpUrl: context.user.pfpUrl ?? '',
-            // ADDED: Pulling custody address from SDK context
-            custody_address: context.user.custody_address ?? '0x0',
+            fid: sdkUser.fid,
+            username: sdkUser.username ?? '',
+            displayName: sdkUser.displayName ?? '',
+            pfpUrl: sdkUser.pfpUrl ?? '',
+            custody_address: sdkUser.custody_address ?? '0x0',
           })
           setIsInMiniApp(true)
         }
@@ -70,7 +72,6 @@ export function FarcasterProvider({ children }: { children: ReactNode }) {
     }
   }, [isInMiniApp])
 
-  // UPDATED: Now accepts an object to match Mint.tsx handleCast usage
   const composeCast = useCallback(({ text, embeds }: { text: string; embeds?: string[] }) => {
     const url = `https://warpcast.com/~/compose?text=${encodeURIComponent(text)}${
       embeds?.length ? `&embeds[]=${embeds.map(encodeURIComponent).join('&embeds[]=')}` : ''
