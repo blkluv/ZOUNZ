@@ -1,15 +1,16 @@
 import { createContext, useContext } from 'react'
 
 export type MintableTrack = {
-  id: string | number; // Changed to allow both to fix Discover.tsx error
+  id: string | number; // Allows both to fix Browse.tsx/Discover.tsx errors
   title: string;
   artist: string;
   audioUrl: string;
-  artworkUrl?: string; // Added for MiniPlayer
-  source?: string;     // Added for MiniPlayer
+  artworkUrl?: string;
+  source?: string;
+  genre?: string;      // ADDED: Fixes Discover.tsx error
   collectionId?: string;
   collectionName?: string;
-  duration?: number;   // Changed to number for math operations
+  duration?: number;
 }
 
 export type PlayerState = {
