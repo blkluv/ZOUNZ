@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useAppStore } from '../lib/store'
-import { useFarcasterContext } from '../providers/FarcasterProvider'
+// Removed unused import: useFarcasterContext
 
 const MOCK_COLLECTIONS = [
   {
@@ -13,9 +13,9 @@ const MOCK_COLLECTIONS = [
     supply: '50',
     mintPrice: '0.001',
     tracks: [
-      { id: 't1', title: 'Midnight Study', artist: 'lofi_master', duration: '3:45', audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' },
-      { id: 't2', title: 'Rainy Night', artist: 'lofi_master', duration: '4:12', audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3' },
-      { id: 't3', title: 'Coffee Break', artist: 'lofi_master', duration: '3:28', audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3' },
+      { id: 't1', title: 'Midnight Study', artist: 'lofi_master', duration: 225, audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' },
+      { id: 't2', title: 'Rainy Night', artist: 'lofi_master', duration: 252, audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3' },
+      { id: 't3', title: 'Coffee Break', artist: 'lofi_master', duration: 208, audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3' },
     ]
   },
   {
@@ -28,8 +28,8 @@ const MOCK_COLLECTIONS = [
     supply: '75',
     mintPrice: '0.0008',
     tracks: [
-      { id: 't4', title: 'Floating', artist: 'ambient_vibes', duration: '5:30', audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' },
-      { id: 't5', title: 'Serenity', artist: 'ambient_vibes', duration: '4:45', audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3' },
+      { id: 't4', title: 'Floating', artist: 'ambient_vibes', duration: 330, audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' },
+      { id: 't5', title: 'Serenity', artist: 'ambient_vibes', duration: 285, audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3' },
     ]
   },
   {
@@ -42,19 +42,26 @@ const MOCK_COLLECTIONS = [
     supply: '100',
     mintPrice: '0.0015',
     tracks: [
-      { id: 't6', title: 'Neon Nights', artist: 'synth_lord', duration: '4:15', audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3' },
-      { id: 't7', title: 'Retro Future', artist: 'synth_lord', duration: '3:55', audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' },
-      { id: 't8', title: 'Electric Dreams', artist: 'synth_lord', duration: '4:30', audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3' },
+      { id: 't6', title: 'Neon Nights', artist: 'synth_lord', duration: 255, audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3' },
+      { id: 't7', title: 'Retro Future', artist: 'synth_lord', duration: 235, audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' },
+      { id: 't8', title: 'Electric Dreams', artist: 'synth_lord', duration: 270, audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3' },
     ]
   },
 ]
 
 type Track = typeof MOCK_COLLECTIONS[0]['tracks'][0]
 
+// Simple helper to display seconds as M:SS for the UI
+const formatTime = (seconds: number) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
 export default function Browse() {
   const [selectedCollection, setSelectedCollection] = useState<typeof MOCK_COLLECTIONS[0] | null>(null)
   const { playerPlay, queueForMint } = useAppStore()
-  const { user } = useFarcasterContext()
+  // Removed unused user variable to satisfy tsc -b
 
   const handlePlayTrack = useCallback((track: Track) => {
     playerPlay({ 
@@ -62,7 +69,7 @@ export default function Browse() {
       title: track.title, 
       artist: track.artist, 
       audioUrl: track.audioUrl,
-      duration: track.duration
+      duration: track.duration // Now correctly passing a number
     })
   }, [playerPlay])
 
@@ -101,7 +108,7 @@ export default function Browse() {
                 </button>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-white truncate">{track.title}</p>
-                  <p className="text-xs text-white/40 truncate">{track.artist} • {track.duration}</p>
+                  <p className="text-xs text-white/40 truncate">{track.artist} • {formatTime(track.duration)}</p>
                 </div>
                 <button
                   onClick={() => handleMintTrack(selectedCollection, track)}
