@@ -1,5 +1,4 @@
 import { useState } from 'react'
-// import { useAppStore } from '../lib/store'  // Commented out for now
 import { useFarcasterContext } from '../providers/FarcasterProvider'
 
 export default function Create() {
