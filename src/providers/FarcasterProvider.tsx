@@ -6,6 +6,7 @@ interface FarcasterUser {
   username: string
   displayName: string
   pfpUrl: string
+  custody_address: string // ADDED: Required for Minting logic
 }
 
 interface FarcasterContextType {
@@ -13,7 +14,7 @@ interface FarcasterContextType {
   isReady: boolean
   isInMiniApp: boolean
   openUrl: (url: string) => void
-  composeCast: (text: string, embeds?: string[]) => void
+  composeCast: (params: { text: string; embeds?: string[] }) => void // UPDATED: Matches your Mint.tsx usage
   close: () => void
 }
 
@@ -45,6 +46,8 @@ export function FarcasterProvider({ children }: { children: ReactNode }) {
             username: context.user.username ?? '',
             displayName: context.user.displayName ?? '',
             pfpUrl: context.user.pfpUrl ?? '',
+            // ADDED: Pulling custody address from SDK context
+            custody_address: context.user.custody_address ?? '0x0',
           })
           setIsInMiniApp(true)
         }
@@ -67,21 +70,16 @@ export function FarcasterProvider({ children }: { children: ReactNode }) {
     }
   }, [isInMiniApp])
 
-  const composeCast = useCallback((text: string, embeds?: string[]) => {
+  // UPDATED: Now accepts an object to match Mint.tsx handleCast usage
+  const composeCast = useCallback(({ text, embeds }: { text: string; embeds?: string[] }) => {
+    const url = `https://warpcast.com/~/compose?text=${encodeURIComponent(text)}${
+      embeds?.length ? `&embeds[]=${embeds.map(encodeURIComponent).join('&embeds[]=')}` : ''
+    }`
+
     if (isInMiniApp) {
-      sdk.actions.openUrl(
-        `https://warpcast.com/~/compose?text=${encodeURIComponent(text)}${
-          embeds?.length ? `&embeds[]=${embeds.map(encodeURIComponent).join('&embeds[]=')}` : ''
-        }`
-      )
+      sdk.actions.openUrl(url)
     } else {
-      console.log('Cast compose (dev mode):', text, embeds)
-      window.open(
-        `https://warpcast.com/~/compose?text=${encodeURIComponent(text)}${
-          embeds?.length ? `&embeds[]=${embeds.map(encodeURIComponent).join('&embeds[]=')}` : ''
-        }`,
-        '_blank'
-      )
+      window.open(url, '_blank')
     }
   }, [isInMiniApp])
 
