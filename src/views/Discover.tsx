@@ -36,7 +36,9 @@ export default function Discover() {
     searchHook.loading
 
   const handleTogglePlay = (track: AudiusTrack) => {
-    const trackId = track.id
+    // Explicitly stringify the ID to match MintableTrack type
+    const trackId = track.id.toString()
+    
     if (player.isPlaying && player.track?.id === trackId) {
       playerPause()
     } else {
@@ -45,7 +47,7 @@ export default function Discover() {
         id: trackId,
         title: track.title,
         artist: track.user.name,
-        audioUrl: getStreamUrl(trackId),
+        audioUrl: getStreamUrl(track.id), // API helper usually handles number/string
         artworkUrl: artwork,
         source: 'audius',
         genre: track.genre,
@@ -58,7 +60,7 @@ export default function Discover() {
   const handleMint = (track: AudiusTrack) => {
     const artwork = track.artwork?.['480x480'] ?? track.artwork?.['150x150']
     queueForMint({
-      id: track.id,
+      id: track.id.toString(),
       title: track.title,
       artist: track.user.name,
       audioUrl: getStreamUrl(track.id),
@@ -66,21 +68,17 @@ export default function Discover() {
       source: 'audius',
       genre: track.genre,
       duration: track.duration,
-      audiusTrackId: track.id,
+      audiusTrackId: track.id.toString(),
     })
   }
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div className="p-4 pb-0">
         <h2 className="text-xl font-bold">Discover</h2>
-        <p className="text-sm text-white/50 mt-1">
-          Hidden gems from Audius
-        </p>
+        <p className="text-sm text-white/50 mt-1">Hidden gems from Audius</p>
       </div>
 
-      {/* Search */}
       <form onSubmit={handleSearch} className="px-4 mt-3">
         <div className="flex gap-2">
           <input
@@ -99,7 +97,6 @@ export default function Discover() {
         </div>
       </form>
 
-      {/* Feed Toggle */}
       <div className="flex gap-1.5 px-4 mt-3">
         {(['underground', 'trending'] as const).map((f) => (
           <button
@@ -121,7 +118,6 @@ export default function Discover() {
         )}
       </div>
 
-      {/* Genre Filter (trending only) */}
       {feed === 'trending' && (
         <div className="flex gap-1.5 px-4 mt-2 overflow-x-auto pb-1">
           {GENRES.map((g) => (
@@ -140,7 +136,6 @@ export default function Discover() {
         </div>
       )}
 
-      {/* Track List */}
       <div className="flex-1 overflow-y-auto px-4 mt-3 pb-4 space-y-2">
         {isLoading ? (
           <div className="space-y-2">
@@ -157,15 +152,13 @@ export default function Discover() {
             ))}
           </div>
         ) : activeTracks.length === 0 ? (
-          <div className="text-center py-16 text-white/25 text-sm">
-            No tracks found
-          </div>
+          <div className="text-center py-16 text-white/25 text-sm">No tracks found</div>
         ) : (
           activeTracks.map((track) => (
             <TrackCard
               key={track.id}
               track={track}
-              isPlaying={player.isPlaying && player.track?.id === track.id}
+              isPlaying={player.isPlaying && player.track?.id === track.id.toString()}
               onTogglePlay={() => handleTogglePlay(track)}
               onMint={() => handleMint(track)}
             />
@@ -195,7 +188,6 @@ function TrackCard({
       isPlaying ? 'border-purple-500/40' : 'border-[var(--zaounz-border)]'
     }`}>
       <div className="flex gap-3">
-        {/* Artwork + Play */}
         <button
           onClick={onTogglePlay}
           className="relative w-12 h-12 rounded-lg overflow-hidden bg-white/5 flex-shrink-0 active:scale-95 transition-transform"
@@ -210,14 +202,8 @@ function TrackCard({
           }`}>
             <span className="text-white text-sm font-bold">{isPlaying ? '⏸' : '▶'}</span>
           </div>
-          {isPlaying && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500">
-              <div className="h-full bg-pink-400 animate-pulse" style={{ width: '60%' }} />
-            </div>
-          )}
         </button>
 
-        {/* Info */}
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium truncate">{track.title}</p>
           <p className="text-xs text-white/40 truncate">{track.user.name}</p>
@@ -229,7 +215,6 @@ function TrackCard({
         </div>
       </div>
 
-      {/* Actions */}
       <div className="flex gap-1.5 mt-2.5">
         <button
           onClick={onMint}
@@ -238,10 +223,10 @@ function TrackCard({
           Mint NFT
         </button>
         <button
-          onClick={() => composeCast(
-            `Check out "${track.title}" by ${track.user.name} on @zaounz 🎵`,
-            [`https://audius.co${track.permalink}`]
-          )}
+          onClick={() => composeCast({
+            text: `Check out "${track.title}" by ${track.user.name} on @zaounz 🎵`,
+            embeds: [`https://audius.co${track.permalink}`]
+          })}
           className="flex-1 py-1.5 rounded-lg bg-white/5 text-white/40 text-[10px] font-medium hover:bg-white/10 transition-all active:scale-[0.98]"
         >
           Share
@@ -258,4 +243,3 @@ function TrackCard({
     </div>
   )
 }
-
